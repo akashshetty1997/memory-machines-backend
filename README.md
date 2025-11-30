@@ -258,6 +258,109 @@ Success rate: 99.9%
 | Cloud Build       | Docker image builds                        |
 | Artifact Registry | Container image storage                    |
 
+## API Response Format
+
+All endpoints return a standardized JSON response:
+
+### Success Response
+
+```json
+{
+  "success": true,
+  "data": { "status": "accepted", "log_id": "log-001" },
+  "error": null
+}
+```
+
+### Error Response
+
+```json
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "tenant_id required"
+  }
+}
+```
+
+### Error Codes
+
+| Code                       | Description                                         |
+| -------------------------- | --------------------------------------------------- |
+| `VALIDATION_ERROR`         | Missing or invalid request fields                   |
+| `INVALID_JSON`             | Request body is not valid JSON                      |
+| `UNSUPPORTED_CONTENT_TYPE` | Content-Type must be application/json or text/plain |
+| `PAYLOAD_TOO_LARGE`        | Text exceeds 5000 characters                        |
+| `SERVICE_UNAVAILABLE`      | Failed to queue message                             |
+
+## Health Check
+
+```bash
+curl https://ingestion-555551574544.us-central1.run.app/health
+```
+
+Response:
+
+```json
+{ "status": "healthy", "service": "ingestion", "version": "1.0.0" }
+```
+
+## Running Tests
+
+### Ingestion Service
+
+```bash
+cd ingestion-service
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+### Worker Service
+
+```bash
+cd worker-service
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+### Load Test
+
+```bash
+cd scripts
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+python load_test.py https://ingestion-555551574544.us-central1.run.app --rpm 1000 --duration 60
+```
+
+## Code Quality
+
+This project uses pre-commit hooks for code quality:
+
+```bash
+# Install pre-commit
+pip install pre-commit
+
+# Install hooks
+pre-commit install
+
+# Run on all files
+pre-commit run --all-files
+```
+
+### Tools Used
+
+- **Black** - Code formatting
+- **isort** - Import sorting
+- **Pylint** - Code linting
+- **GitHub Actions** - CI/CD pipeline
+
 ## Deployment
 
 ### Prerequisites
@@ -305,8 +408,4 @@ Access the API documentation at:
 
 ```
 https://ingestion-555551574544.us-central1.run.app/docs
-```
-
-```
-
 ```
