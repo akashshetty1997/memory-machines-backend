@@ -1,0 +1,58 @@
+# Memory Machines Backend - Python Project Configuration
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | venv
+    | __pycache__
+    | \.pytest_cache
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+skip = [".git", "venv", ".venv", "__pycache__"]
+
+[tool.pylint.main]
+ignore = ["venv", ".venv", "__pycache__", ".git"]
+jobs = 0
+
+[tool.pylint.messages_control]
+disable = [
+    "C0103",  # invalid-name (global variables)
+    "C0114",  # missing-module-docstring
+    "C0115",  # missing-class-docstring
+    "C0116",  # missing-function-docstring
+    "C0121",  # singleton-comparison
+    "C0301",  # line-too-long (handled by black)
+    "C0413",  # wrong-import-position
+    "E0401",  # import-error
+    "E0611",  # no-name-in-module
+    "E1101",  # no-member
+    "R0801",  # duplicate-code
+    "R0903",  # too-few-public-methods
+    "R0911",  # too-many-return-statements
+    "R0914",  # too-many-locals
+    "R0915",  # too-many-statements
+    "W0603",  # global-statement
+    "W0613",  # unused-argument
+    "W0611",  # unused-import
+    "W0621",  # redefined-outer-name
+    "W0718",  # broad-exception-caught
+    "W1203",  # logging-fstring-interpolation
+]
+
+[tool.pylint.format]
+max-line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

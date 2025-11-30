@@ -1,0 +1,100 @@
+# Memory Machines Backend - CI Pipeline
+# Runs on every push and pull request
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install linting tools
+        run: |
+          pip install black isort pylint
+
+      - name: Check formatting with Black
+        run: |
+          black --check --line-length 100 ingestion-service/ worker-service/
+
+      - name: Check import sorting with isort
+        run: |
+          isort --check-only --profile black ingestion-service/ worker-service/
+
+      - name: Lint with Pylint
+        run: |
+          pylint --disable=C0114,C0115,C0116,R0903,W0613,E0401 ingestion-service/*.py ingestion-service/api/*.py || true
+          pylint --disable=C0114,C0115,C0116,R0903,W0613,E0401 worker-service/*.py worker-service/api/*.py || true
+
+  test-ingestion:
+    name: Test Ingestion Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd ingestion-service
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          cd ingestion-service
+          pytest tests/ -v
+
+  test-worker:
+    name: Test Worker Service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd worker-service
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          cd worker-service
+          pytest tests/ -v
+
+  security:
+    name: Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run security scan
+        run: |
+          bandit -r ingestion-service/ -x tests --skip B101 || true
+          bandit -r worker-service/ -x tests --skip B101 || true
