@@ -41,10 +41,22 @@ class TestJSONIngestion:
             "/ingest", json=payload, headers={"Content-Type": "application/json"}
         )
         assert response.status_code == 202
-        assert response.json()["success"] == True
+        assert response.json()["success"] is True
         assert response.json()["data"]["status"] == "accepted"
         assert response.json()["data"]["log_id"] == "test-001"
+        assert "correlation_id" in response.json()["data"]
         assert response.json()["error"] is None
+
+    def test_request_id_header_is_used_as_correlation_id(self, mock_pubsub):
+        """X-Request-Id header should be used as correlation_id."""
+        payload = {"tenant_id": "acme_corp", "log_id": "test-001", "text": "Test log message"}
+        response = client.post(
+            "/ingest",
+            json=payload,
+            headers={"Content-Type": "application/json", "X-Request-Id": "my-custom-request-id"},
+        )
+        assert response.status_code == 202
+        assert response.json()["data"]["correlation_id"] == "my-custom-request-id"
 
     def test_missing_tenant_id_returns_400(self, mock_pubsub):
         """Missing tenant_id should return 400."""
@@ -95,9 +107,10 @@ class TestTextPlainIngestion:
             headers={"Content-Type": "text/plain", "X-Tenant-ID": "acme_corp"},
         )
         assert response.status_code == 202
-        assert response.json()["success"] == True
+        assert response.json()["success"] is True
         assert response.json()["data"]["status"] == "accepted"
         assert "log_id" in response.json()["data"]
+        assert "correlation_id" in response.json()["data"]
 
     def test_missing_tenant_header_returns_400(self, mock_pubsub):
         """Missing X-Tenant-ID header should return 400."""

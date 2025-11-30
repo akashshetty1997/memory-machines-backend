@@ -156,6 +156,9 @@ Data is stored in tenant-isolated paths: `tenants/{tenant_id}/processed_logs/{lo
 async def ingest(request: Request):
     content_type = request.headers.get("content-type", "").lower()
 
+    # Correlation ID: from header or generate
+    correlation_id = request.headers.get("x-request-id") or str(uuid4())
+
     # --- Parse based on content type ---
     if content_type.startswith("application/json"):
         try:
@@ -288,6 +291,7 @@ async def ingest(request: Request):
             source=source,
             content_hash=content_hash,
             schema_version=SCHEMA_VERSION,
+            correlation_id=correlation_id,
         )
         future.add_done_callback(lambda f: publish_callback(f, log_id))
 
@@ -309,7 +313,11 @@ async def ingest(request: Request):
     return JSONResponse(
         content={
             "success": True,
-            "data": {"status": "accepted", "log_id": log_id},
+            "data": {
+                "status": "accepted",
+                "log_id": log_id,
+                "correlation_id": correlation_id,
+            },
             "error": None,
         },
         status_code=202,

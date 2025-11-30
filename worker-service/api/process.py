@@ -165,6 +165,7 @@ async def process(request: Request):
     log_id = attrs.get("log_id")
     source = attrs.get("source", "unknown")
     content_hash = attrs.get("content_hash", "")
+    correlation_id = attrs.get("correlation_id", "")
 
     if not tenant_id or not log_id:
         logger.error(f"missing tenant_id or log_id: {attrs}")
@@ -180,7 +181,7 @@ async def process(request: Request):
             status_code=400,
         )
 
-    # --- Idempotency check ---
+    # --- Idempotency check & Firestore write ---
     db_client = get_db()
     doc_ref = (
         db_client.collection("tenants")
@@ -189,47 +190,70 @@ async def process(request: Request):
         .document(log_id)
     )
 
-    if content_hash:
-        existing = doc_ref.get()
-        if existing.exists:
-            existing_hash = existing.to_dict().get("content_hash", "")
-            if existing_hash == content_hash:
-                logger.info(f"skip duplicate: tenant={tenant_id} log_id={log_id}")
-                return JSONResponse(
-                    content={
-                        "success": True,
-                        "data": {
-                            "status": "skipped",
-                            "log_id": log_id,
-                            "reason": "duplicate",
+    try:
+        # Idempotency: check existing document if we have a content_hash
+        if content_hash:
+            existing = doc_ref.get()
+            if existing.exists:
+                existing_hash = existing.to_dict().get("content_hash", "")
+                if existing_hash == content_hash:
+                    logger.info(f"skip duplicate: tenant={tenant_id} log_id={log_id}")
+                    return JSONResponse(
+                        content={
+                            "success": True,
+                            "data": {
+                                "status": "skipped",
+                                "log_id": log_id,
+                                "reason": "duplicate",
+                            },
+                            "error": None,
                         },
-                        "error": None,
-                    },
-                    status_code=200,
-                )
+                        status_code=200,
+                    )
 
-    # --- Simulate heavy processing (PDF requirement: 0.05s per char) ---
-    sleep_duration = len(text) * SLEEP_PER_CHAR
+        # --- Simulate heavy processing (PDF requirement: 0.05s per char) ---
+        sleep_duration = len(text) * SLEEP_PER_CHAR
+        logger.info(
+            f"processing: tenant={tenant_id} log_id={log_id} "
+            f"correlation_id={correlation_id} chars={len(text)} "
+            f"sleep={sleep_duration:.2f}s"
+        )
+        await asyncio.sleep(sleep_duration)
+
+        # --- Apply redaction ---
+        redacted_text = redact_sensitive_data(text)
+
+        # --- Write to Firestore (tenant-isolated path) ---
+        doc_data = {
+            "source": source,
+            "original_text": text,
+            "modified_data": redacted_text,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "content_hash": content_hash,
+            "correlation_id": correlation_id,
+        }
+        doc_ref.set(doc_data)
+
+    except Exception as exc:
+        logger.exception(
+            "firestore operation failed",
+            extra={"tenant_id": tenant_id, "log_id": log_id},
+        )
+        return JSONResponse(
+            content={
+                "success": False,
+                "data": None,
+                "error": {
+                    "code": ErrorCodes.PROCESSING_ERROR,
+                    "message": "failed to persist processed log",
+                },
+            },
+            status_code=500,
+        )
+
     logger.info(
-        f"processing: tenant={tenant_id} log_id={log_id} chars={len(text)} sleep={sleep_duration:.2f}s"
+        f"stored: tenants/{tenant_id}/processed_logs/{log_id} " f"correlation_id={correlation_id}"
     )
-    await asyncio.sleep(sleep_duration)
-
-    # --- Apply redaction ---
-    redacted_text = redact_sensitive_data(text)
-
-    # --- Write to Firestore (tenant-isolated path) ---
-    doc_data = {
-        "source": source,
-        "original_text": text,
-        "modified_data": redacted_text,
-        "processed_at": datetime.now(timezone.utc).isoformat(),
-        "content_hash": content_hash,
-    }
-
-    doc_ref.set(doc_data)
-
-    logger.info(f"stored: tenants/{tenant_id}/processed_logs/{log_id}")
     return JSONResponse(
         content={
             "success": True,

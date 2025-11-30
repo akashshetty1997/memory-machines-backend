@@ -14,7 +14,9 @@ from main import app
 client = TestClient(app)
 
 
-def create_pubsub_envelope(text, tenant_id, log_id, source="json_upload", content_hash="abc123"):
+def create_pubsub_envelope(
+    text, tenant_id, log_id, source="json_upload", content_hash="abc123", correlation_id="corr-123"
+):
     """Helper to create Pub/Sub push envelope."""
     return {
         "message": {
@@ -24,6 +26,7 @@ def create_pubsub_envelope(text, tenant_id, log_id, source="json_upload", conten
                 "log_id": log_id,
                 "source": source,
                 "content_hash": content_hash,
+                "correlation_id": correlation_id,
             },
             "messageId": "test-message-id",
         },
@@ -189,3 +192,47 @@ class TestTenantIsolation:
         tenant_ids = [call[0][0] for call in calls]
         assert "acme_corp" in tenant_ids
         assert "beta_inc" in tenant_ids
+
+
+class TestCorrelationId:
+    """Tests for correlation ID handling."""
+
+    def test_correlation_id_stored_in_firestore(self, mock_firestore, mock_sleep):
+        """Correlation ID should be stored in Firestore document."""
+        mock_doc_ref = mock_firestore["doc_ref"]
+
+        envelope = create_pubsub_envelope(
+            text="Test log message",
+            tenant_id="acme_corp",
+            log_id="test-001",
+            correlation_id="my-correlation-id",
+        )
+        response = client.post("/process", json=envelope)
+
+        assert response.status_code == 200
+        mock_doc_ref.set.assert_called_once()
+        call_args = mock_doc_ref.set.call_args[0][0]
+        assert call_args["correlation_id"] == "my-correlation-id"
+
+
+class TestProcessingErrors:
+    """Tests for processing error handling."""
+
+    def test_firestore_failure_returns_processing_error(self, mock_firestore, mock_sleep):
+        """Firestore failures should return 500 with PROCESSING_ERROR."""
+        mock_doc_ref = mock_firestore["doc_ref"]
+        mock_doc_ref.set.side_effect = Exception("boom")
+
+        envelope = create_pubsub_envelope(
+            text="Test log message",
+            tenant_id="acme_corp",
+            log_id="test-001",
+            content_hash="abc123",
+        )
+        response = client.post("/process", json=envelope)
+        body = response.json()
+
+        assert response.status_code == 500
+        assert body["success"] is False
+        assert body["error"]["code"] == "PROCESSING_ERROR"
+        assert body["error"]["message"] == "failed to persist processed log"

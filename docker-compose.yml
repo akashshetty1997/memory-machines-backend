@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  ingestion:
+    build: ./ingestion-service
+    container_name: ingestion-service
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      # fallback if not present in .env
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-your-gcp-project-id}
+      PUBSUB_TOPIC_ID: ${PUBSUB_TOPIC_ID:-ingestion-topic}
+
+  worker:
+    build: ./worker-service
+    container_name: worker-service
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env
+    environment:
+      GCP_PROJECT_ID: ${GCP_PROJECT_ID:-your-gcp-project-id}
