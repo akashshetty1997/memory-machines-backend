@@ -14,7 +14,6 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from google.cloud import firestore
 from response import APIResponse, ErrorCodes
-from schemas import ErrorResponse, PubSubEnvelope
 from utils import redact_sensitive_data
 
 # --- Logging ---
@@ -234,7 +233,7 @@ async def process(request: Request):
         }
         doc_ref.set(doc_data)
 
-    except Exception as exc:
+    except Exception:
         logger.exception(
             "firestore operation failed",
             extra={"tenant_id": tenant_id, "log_id": log_id},
